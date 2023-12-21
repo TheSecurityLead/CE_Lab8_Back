@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 const weatherData = require('./data/weather.json');
 const app = express();
 const port = 3001;
@@ -26,22 +27,21 @@ function handleError(res, error) {
 
   
 // Route for /weather
-app.get('/weather', (req, res) => {
-    try {
-      const { lat, lon, searchQuery } = req.query;
-      const cityData = weatherData.find(city => city.lat === lat && city.lon === lon && city.city_name.toLowerCase() === searchQuery.toLowerCase());
-  
-      if (!cityData) {
-        res.status(404).send({ error: 'City not found' });
-        return;
-      }
-  
-      const forecasts = cityData.data.map(d => new Forecast(d.valid_date, `Low of ${d.low_temp}, high of ${d.high_temp} with ${d.weather.description}`));
-      res.json(forecasts);
-    } catch (error) {
-      handleError(res, error);
-    }
-  });
+app.get('/weather', async (req, res) => {
+  const { lat, lon } = req.query;
+  const apiKey = process.env.WEATHER_API_KEY;
+  const url = `http://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${lat},${lon}&days=3`;
+
+  try {
+    const response = await axios.get(url);
+    const forecasts = response.data.forecast.forecastday.map(day => {
+      return new Forecast(`Low of ${day.day.mintemp_c}, high of ${day.day.maxtemp_c} with ${day.day.condition.text}`, day.date);
+    });
+    res.send(forecasts);
+  } catch (error) {
+    handleError(error, res);
+  }
+});
   
 
 app.listen(port, () => {
